@@ -1,0 +1,6 @@
+<RCC>
+    <qresource prefix="/">
+        <file>assets/outofslides.png</file>
+        <file>assets/instructions.png</file>
+    </qresource>
+</RCC>

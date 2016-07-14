@@ -16,7 +16,7 @@ CONFIGS="rpi"
 
 for CONFIG in $CONFIGS; do
     # Run the create-build.sh script to create/update the build directory
-    $NERVES_SYSTEM_BR/create-build.sh $CONFIG/nerves_defconfig o/$CONFIG
+    $NERVES_SYSTEM_BR/create-build.sh presenter_system_$CONFIG/nerves_defconfig presenter_system_$CONFIG/o/$CONFIG
 done
 
 # Build configurations

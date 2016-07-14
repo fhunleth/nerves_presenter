@@ -21,7 +21,7 @@ defmodule Fw.Mixfile do
   # Type `mix help compile.app` for more information.
   def application do
     [mod: {Fw, []},
-     applications: [:nerves, :logger]]
+     applications: [:nerves, :logger, :presenter]]
   end
 
   def deps do
@@ -29,7 +29,8 @@ defmodule Fw.Mixfile do
   end
 
   def system(target) do
-    [{:"nerves_system_#{target}", ">= 0.0.0"}]
+    [{:"presenter_system_#{target}", in_umbrella: true},
+     {:presenter, in_umbrella: true}]
   end
 
   def aliases do

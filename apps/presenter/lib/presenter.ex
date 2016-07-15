@@ -8,8 +8,7 @@ defmodule Presenter do
 
     # Define workers and child supervisors to be supervised
     children = [
-      worker(Presenter.Slides, []),
-      worker(Presenter.Display, []),
+      worker(Presenter.Slides, [])
     ]
 
     # See http://elixir-lang.org/docs/stable/elixir/Supervisor.html

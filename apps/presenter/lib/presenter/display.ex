@@ -1,4 +1,4 @@
-defmodule NervesPresenter.Display do
+defmodule Presenter.Display do
   use GenServer
 
   def start_link(opts \\ []) do

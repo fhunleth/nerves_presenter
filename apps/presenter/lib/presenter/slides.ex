@@ -1,4 +1,4 @@
-defmodule NervesPresenter.Slides do
+defmodule Presenter.Slides do
   use GenServer
 
   # Public API
@@ -11,20 +11,21 @@ defmodule NervesPresenter.Slides do
   end
 
   def first do
-    set_url(base_url())
+    #set_url(base_url())
+    :ok
   end
 
   # Go to the specified slide number.
   def goto(number) do
-    set_url(base_url() <> Integer.to_string(number))
+    #set_url(base_url() <> Integer.to_string(number))
+    :ok
   end
 
   # gen_server callbacks
   def init(_args) do
-    executable = :code.priv_dir(:nerves_presenter) ++ '/console'
+    executable = :code.priv_dir(:presenter) ++ '/console'
     port = Port.open({:spawn_executable, executable}, [{:packet, 2}, :use_stdio, :binary])
     state = %{port: port}
-    cast_port(state, :set_url, [base_url()])
     { :ok, state }
   end
 
@@ -57,7 +58,4 @@ defmodule NervesPresenter.Slides do
     end
   end
 
-  defp base_url do
-    List.to_string('file://' ++ :code.priv_dir(:pljelixir) ++ '/html/index.html#/')
-  end
 end

@@ -9,7 +9,7 @@ defmodule PresenterSystemRpi.Mixfile do
     [app: :presenter_system_rpi,
      version: @version,
      elixir: "~> 1.2",
-     compilers: Mix.compilers ++ [:nerves_system],
+     #compilers: Mix.compilers ++ [:nerves_system],
      description: description,
      package: package,
      deps: deps]
@@ -20,8 +20,8 @@ defmodule PresenterSystemRpi.Mixfile do
   end
 
   defp deps do
-    [{:nerves_system, "~> 0.1.4"},
-     {:nerves_system_br, github: "nerves-project/nerves_system_br", ref: "fcf6eb3215913fdbc2716590e245b720775ccad2"},
+    [{:nerves_system, github: "nerves-project/nerves_system", branch: "master"},
+     {:nerves_system_br, github: "nerves-project/nerves_system_br", ref: "edc6a51c4254b26161e1d3b40765739a61e1980d"},
      #{:nerves_system_br, "~> 0.6.0"},
      {:nerves_toolchain_armv6_rpi_linux_gnueabi, "~> 0.6.1"}]
   end

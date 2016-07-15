@@ -7,3 +7,6 @@ use Mix.Config
 
 config :nerves, :firmware,
   rootfs_additions: "config/rootfs-additions"
+
+config :elixir,
+  ansi_enabled: true

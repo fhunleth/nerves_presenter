@@ -21,4 +21,6 @@ erl_crash.dump
 /src/Makefile
 /src/console
 /src/*.pro.user
+/src/moc_*
+/src/qrc_*
 /priv

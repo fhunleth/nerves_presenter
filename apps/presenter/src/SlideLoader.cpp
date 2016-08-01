@@ -17,9 +17,12 @@ void SlideLoader::setSlidePath(const QString &path)
     nameFilters << "*.jpg"
                 << "*.png"
                 << "*.gif"
-                << "*.jpeg";
-    files_ = dir.entryList(nameFilters, QDir::Files);
-    shuffleFiles();
+                << "*.jpeg"
+                << "*.PNG"
+                << "*.JPG"
+                << "*.GIF";
+    files_ = dir.entryList(nameFilters, QDir::Files, QDir::Name);
+    //shuffleFiles();
 
     cache_.clear();
 

@@ -138,6 +138,12 @@ bool ConsoleWidget::processEscapeSequence(const QByteArray &seq)
 
     QTextCursor cursor = textCursor();
     switch (cmd) {
+    case 'A':
+        //cursor.movePosition(QTextCursor::Up, QTextCursor::MoveAnchor, numCount == 0 ? 1 : num[0]);
+        break;
+    case 'B':
+        //cursor.movePosition(QTextCursor::Down, QTextCursor::MoveAnchor, numCount == 0 ? 1 : num[0]);
+        break;
     case 'C':
         cursor.movePosition(QTextCursor::Right, QTextCursor::MoveAnchor, numCount == 0 ? 1 : num[0]);
         break;

@@ -12,7 +12,7 @@ int main(int argc, char *argv[])
 {
     QApplication a(argc, argv);
 
-    QString slidePath = argc > 1 ? argv[1] : "/mnt";
+    QString slidePath = argc > 1 ? argv[1] : "/root";
 
     ConsoleWidget *c = new ConsoleWidget();
     PresentationWidget *mainWidget = new PresentationWidget(slidePath);
@@ -29,7 +29,7 @@ int main(int argc, char *argv[])
     // On EGL, it seems like we have to force focus
     switcher.forceFocus();
 
-    switcher.toggle();
+    //switcher.toggle();
 
     return a.exec();
 }

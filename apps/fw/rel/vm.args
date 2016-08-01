@@ -1,3 +1,9 @@
+## Name of the node
+-sname nerves
+
+## Cookie for distributed erlang
+-setcookie democookie
+
 ## Start the Elixir shell
 -noshell
 -user Elixir.IEx.CLI

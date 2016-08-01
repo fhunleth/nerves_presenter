@@ -10,3 +10,9 @@ config :nerves, :firmware,
 
 config :elixir,
   ansi_enabled: true
+
+# With dtach, width gets detected as 0. I believe that erlinit
+# should be setting a good default
+#config :iex,
+# width: 80
+

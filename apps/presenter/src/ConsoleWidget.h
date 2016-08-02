@@ -39,6 +39,7 @@ signals:
 protected:
     void paintEvent(QPaintEvent *);
     void timerEvent(QTimerEvent *);
+    void resizeEvent(QResizeEvent *);
 
     void keyPressEvent(QKeyEvent *e);
 

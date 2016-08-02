@@ -120,6 +120,7 @@ void ConsoleWidget::flushBuffer()
         }
         buffer_.clear();
     }
+    update();
 }
 
 bool ConsoleWidget::processEscapeSequence(const QByteArray &seq)
@@ -155,16 +156,20 @@ bool ConsoleWidget::processEscapeSequence(const QByteArray &seq)
 
     switch (cmd) {
     case 'A':
-        //cursor.movePosition(QTextCursor::Up, QTextCursor::MoveAnchor, numCount == 0 ? 1 : num[0]);
+        moveCursorUp(numCount == 0 ? 1 : num[0]);
+        update();
         break;
     case 'B':
-        //cursor.movePosition(QTextCursor::Down, QTextCursor::MoveAnchor, numCount == 0 ? 1 : num[0]);
+        moveCursorDown(numCount == 0 ? 1 : num[0]);
+        update();
         break;
     case 'C':
         moveCursorRight(numCount == 0 ? 1 : num[0]);
+        update();
         break;
     case 'D':
         moveCursorLeft(numCount == 0 ? 1 : num[0]);
+        update();
         break;
     case 'm':
         if (numCount != 1) {
@@ -335,6 +340,8 @@ void ConsoleWidget::clear()
         cells_[i].c = QLatin1Char(' ');
         cells_[i].color = color;
     }
+    cursorX_ = 0;
+    cursorY_ = 0;
 }
 
 void ConsoleWidget::setColor(quint8 color)
@@ -345,6 +352,7 @@ void ConsoleWidget::setColor(quint8 color)
 void ConsoleWidget::moveCursorUp(int count)
 {
     cursorY_ = qMax(0, cursorY_ - count);
+    blink_ = false;
 }
 
 void ConsoleWidget::moveCursorDown(int count)
@@ -357,6 +365,7 @@ void ConsoleWidget::moveCursorDown(int count)
         }
         count--;
     }
+    blink_ = false;
 }
 
 void ConsoleWidget::moveCursorLeft(int count)
@@ -370,6 +379,7 @@ void ConsoleWidget::moveCursorLeft(int count)
         }
         count--;
     }
+    blink_ = false;
 }
 
 void ConsoleWidget::moveCursorRight(int count)
@@ -383,6 +393,7 @@ void ConsoleWidget::moveCursorRight(int count)
         }
         count--;
     }
+    blink_ = false;
 }
 
 void ConsoleWidget::moveCursorStartOfLine()
@@ -445,25 +456,36 @@ void ConsoleWidget::paintEvent(QPaintEvent *)
 
     p.setFont(font_);
     int index = 0;
-    for (int i = 0; i < 24; i++) {
-        for (int j = 0; j < 80; j++) {
-            QRect r(j * cellSize_.width(),
-                    i * cellSize_.height(),
-                    cellSize_.width(),
-                    cellSize_.height());
-            p.fillRect(r, colors_[cells_[index].color >> 4]);
+    int y = 0;
+    int x = 0;
+    for (int i = 0; i < consoleHeight_; i++) {
+        x = 0;
+        for (int j = 0; j < consoleWidth_; j++) {
+            p.fillRect(x, y, cellSize_.width(), cellSize_.height(), colors_[cells_[index].color >> 4]);
             QChar c = cells_[index].c;
             if (c != QLatin1Char(' ')) {
                 p.setPen(colors_[cells_[index].color & 0x0f]);
-                p.drawText(r.x(),
-                           r.y() + baseline_,
+                p.drawText(x,
+                           y + baseline_,
                            QString(c));
             }
             index++;
+            x += cellSize_.width();
         }
+        y += cellSize_.height();
     }
 
-    if (blink_) {
+    // Fill in the areas not covered by the console
+    quint8 background = getCurrentColor() >> 4;
+    QColor backgroundColor = colors_[background];
+    int consoleWidthPixels = x;
+    int consoleHeightPixels = y;
+
+    p.fillRect(consoleWidthPixels, 0, width() - consoleWidthPixels, height(), backgroundColor);
+    p.fillRect(0, consoleHeightPixels, consoleWidthPixels, height() - consoleHeightPixels, backgroundColor);
+
+    // Draw the cursor
+    if (!blink_) {
         QRect r(cursorX_ * cellSize_.width(),
                 cursorY_ * cellSize_.height() + baseline_,
                 cellSize_.width(),
@@ -476,4 +498,9 @@ void ConsoleWidget::timerEvent(QTimerEvent *)
 {
     blink_ = !blink_;
     update();
+}
+
+void ConsoleWidget::resizeEvent(QResizeEvent *)
+{
+
 }

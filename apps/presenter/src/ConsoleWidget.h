@@ -65,7 +65,8 @@ private:
     QSize cellSize_;
     int baseline_;
 
-    QColor colors_[16];
+    QColor foregroundColors_[16];
+    QColor backgroundColors_[16];
 
     struct Cell {
         QChar c;

@@ -23,22 +23,27 @@ ConsoleWidget::ConsoleWidget(QWidget *parent) :
     setFontSize(12);
 
     // ANSI colors
-    colors_[0] =  QColor(0x00, 0x00, 0x00);
-    colors_[1] =  QColor(0xaa, 0x00, 0x00);
-    colors_[2] =  QColor(0x00, 0xaa, 0x00);
-    colors_[3] =  QColor(0xaa, 0x55, 0x00);
-    colors_[4] =  QColor(0x00, 0x00, 0xaa);
-    colors_[5] =  QColor(0xaa, 0x00, 0xaa);
-    colors_[6] =  QColor(0x00, 0xaa, 0xaa);
-    colors_[7] =  QColor(0xaa, 0xaa, 0xaa);
-    colors_[8] =  QColor(0x55, 0x55, 0x55);
-    colors_[9] =  QColor(0xff, 0x55, 0x55);
-    colors_[10] = QColor(0x55, 0xff, 0x55);
-    colors_[11] = QColor(0xff, 0xff, 0x55);
-    colors_[12] = QColor(0x55, 0x55, 0xff);
-    colors_[13] = QColor(0xff, 0x55, 0xff);
-    colors_[14] = QColor(0x55, 0xff, 0xff);
-    colors_[15] = QColor(0xff, 0xff, 0xff);
+    foregroundColors_[0] =  QColor(0x00, 0x00, 0x00);
+    foregroundColors_[1] =  QColor(0xaa, 0x00, 0x00);
+    foregroundColors_[2] =  QColor(0x00, 0xaa, 0x00);
+    foregroundColors_[3] =  QColor(0xaa, 0x55, 0x00);
+    foregroundColors_[4] =  QColor(0x00, 0x00, 0xaa);
+    foregroundColors_[5] =  QColor(0xaa, 0x00, 0xaa);
+    foregroundColors_[6] =  QColor(0x00, 0xaa, 0xaa);
+    foregroundColors_[7] =  QColor(0xaa, 0xaa, 0xaa);
+    foregroundColors_[8] =  QColor(0x55, 0x55, 0x55);
+    foregroundColors_[9] =  QColor(0xff, 0x55, 0x55);
+    foregroundColors_[10] = QColor(0x55, 0xff, 0x55);
+    foregroundColors_[11] = QColor(0xff, 0xff, 0x55);
+    foregroundColors_[12] = QColor(0x55, 0x55, 0xff);
+    foregroundColors_[13] = QColor(0xff, 0x55, 0xff);
+    foregroundColors_[14] = QColor(0x55, 0xff, 0xff);
+    foregroundColors_[15] = QColor(0xff, 0xff, 0xff);
+
+    for (int i = 0; i < 16; i++) {
+        backgroundColors_[i] = foregroundColors_[i];
+        backgroundColors_[i].setAlpha(192);
+    }
 
     cells_ = new Cell[consoleHeight_ * consoleWidth_];
     cursorX_ = 0;
@@ -461,10 +466,10 @@ void ConsoleWidget::paintEvent(QPaintEvent *)
     for (int i = 0; i < consoleHeight_; i++) {
         x = 0;
         for (int j = 0; j < consoleWidth_; j++) {
-            p.fillRect(x, y, cellSize_.width(), cellSize_.height(), colors_[cells_[index].color >> 4]);
+            p.fillRect(x, y, cellSize_.width(), cellSize_.height(), backgroundColors_[cells_[index].color >> 4]);
             QChar c = cells_[index].c;
             if (c != QLatin1Char(' ')) {
-                p.setPen(colors_[cells_[index].color & 0x0f]);
+                p.setPen(foregroundColors_[cells_[index].color & 0x0f]);
                 p.drawText(x,
                            y + baseline_,
                            QString(c));
@@ -477,7 +482,7 @@ void ConsoleWidget::paintEvent(QPaintEvent *)
 
     // Fill in the areas not covered by the console
     quint8 background = getCurrentColor() >> 4;
-    QColor backgroundColor = colors_[background];
+    QColor backgroundColor = backgroundColors_[background];
     int consoleWidthPixels = x;
     int consoleHeightPixels = y;
 
@@ -490,7 +495,7 @@ void ConsoleWidget::paintEvent(QPaintEvent *)
                 cursorY_ * cellSize_.height() + baseline_,
                 cellSize_.width(),
                 cellSize_.height() - baseline_);
-        p.fillRect(r, QColor(Qt::white));
+        p.fillRect(r, foregroundColors_[7]);
     }
 }
 

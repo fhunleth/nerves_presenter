@@ -4,29 +4,62 @@
 #include <QKeyEvent>
 #include <QTextBlock>
 #include <QScrollBar>
+#include <QPainter>
 
 #include <ctype.h>
 
 #define ALPHA 240
 #define stringify(x) #x
 
-ConsoleWidget::ConsoleWidget(QWidget *parent) :
-    QTextEdit(parent)
-{
-    QString stylesheet = QString("background-color: rgb(0,0,0,%1); color: white; font-family: DejaVu Sans Mono").arg(ALPHA);
-    setStyleSheet(stylesheet);
+#define DTACH_PIPE  "/tmp/iex_prompt"
 
-    ansiBg_ = 0;
-    ansiFg_ = 7;
-    inverse_ = false;
+ConsoleWidget::ConsoleWidget(QWidget *parent) :
+    QWidget(parent),
+    consoleWidth_(80),
+    consoleHeight_(24),
+    blink_(false)
+
+{
+    setFontSize(12);
+
+    // ANSI colors
+    colors_[0] =  QColor(0x00, 0x00, 0x00);
+    colors_[1] =  QColor(0xaa, 0x00, 0x00);
+    colors_[2] =  QColor(0x00, 0xaa, 0x00);
+    colors_[3] =  QColor(0xaa, 0x55, 0x00);
+    colors_[4] =  QColor(0x00, 0x00, 0xaa);
+    colors_[5] =  QColor(0xaa, 0x00, 0xaa);
+    colors_[6] =  QColor(0x00, 0xaa, 0xaa);
+    colors_[7] =  QColor(0xaa, 0xaa, 0xaa);
+    colors_[8] =  QColor(0x55, 0x55, 0x55);
+    colors_[9] =  QColor(0xff, 0x55, 0x55);
+    colors_[10] = QColor(0x55, 0xff, 0x55);
+    colors_[11] = QColor(0xff, 0xff, 0x55);
+    colors_[12] = QColor(0x55, 0x55, 0xff);
+    colors_[13] = QColor(0xff, 0x55, 0xff);
+    colors_[14] = QColor(0x55, 0xff, 0xff);
+    colors_[15] = QColor(0xff, 0xff, 0xff);
+
+    cells_ = new Cell[consoleHeight_ * consoleWidth_];
+    cursorX_ = 0;
+    cursorY_ = 0;
+    currentColor_ = 0x07; // white on black background
+    currentInverse_ = false;
+
+    clear();
+
+    startTimer(500);
 
     client_ = new DtachClient(this);
     connect(client_, SIGNAL(dataReceived(QByteArray)), SLOT(dataReceived(QByteArray)));
     connect(client_, SIGNAL(error()), SLOT(error()));
 
-    client_->attach("/tmp/iex_prompt");
+    client_->attach(DTACH_PIPE);
+}
 
-    setOverwriteMode(true);
+ConsoleWidget::~ConsoleWidget()
+{
+    delete[] cells_;
 }
 
 void ConsoleWidget::dataReceived(const QByteArray &data)
@@ -50,57 +83,41 @@ void ConsoleWidget::dataReceived(const QByteArray &data)
     escapeSequence_.clear();
 
     flushBuffer();
-    ensureCursorVisible();
 }
 
 void ConsoleWidget::error()
 {
-    textCursor().insertText("Error from dtach!!");
+    print("Error from dtach. Check " DTACH_PIPE "!");
 }
 
 void ConsoleWidget::flushBuffer()
 {
     if (!buffer_.isEmpty()) {
-
-        QTextCharFormat format;
-        QColor bg = ansiToColor(inverse_ ? ansiFg_ : ansiBg_);
-        if (bg == QColor(0, 0, 0))
-            format.clearBackground();
-        else
-            format.setBackground(bg);
-        format.setForeground(ansiToColor(inverse_ ? ansiBg_ : ansiFg_));
-
         QString text = QString::fromUtf8(buffer_);
-        QTextCursor cursor = textCursor();
         for (int i = 0; i < text.length(); i++) {
             QChar c = text.at(i);
             switch (c.unicode()) {
             case '\a':
+                // Ignore beeps.
                 break;
 
             case '\b':
-                cursor.movePosition(QTextCursor::Left);
+                moveCursorLeft(1);
                 break;
 
             case '\r':
-                cursor.movePosition(QTextCursor::StartOfLine);
+                moveCursorStartOfLine();
                 break;
 
             case '\n':
-                cursor.movePosition(QTextCursor::EndOfBlock);
-                cursor.insertBlock();
+                moveCursorDown(1);
                 break;
 
             default:
-                if (!cursor.atBlockEnd())
-                    cursor.deleteChar();
-                //if (!isprint(c.unicode()))
-                //qDebug("Not printable: %d (%s)", c.unicode(), QString(c).toUtf8().constData());
-                cursor.insertText(QString(c), format);
+                putchar(c);
                 break;
             }
         }
-        setTextCursor(cursor);
         buffer_.clear();
     }
 }
@@ -136,7 +153,6 @@ bool ConsoleWidget::processEscapeSequence(const QByteArray &seq)
         }
     }
 
-    QTextCursor cursor = textCursor();
     switch (cmd) {
     case 'A':
         //cursor.movePosition(QTextCursor::Up, QTextCursor::MoveAnchor, numCount == 0 ? 1 : num[0]);
@@ -145,10 +161,10 @@ bool ConsoleWidget::processEscapeSequence(const QByteArray &seq)
         //cursor.movePosition(QTextCursor::Down, QTextCursor::MoveAnchor, numCount == 0 ? 1 : num[0]);
         break;
     case 'C':
-        cursor.movePosition(QTextCursor::Right, QTextCursor::MoveAnchor, numCount == 0 ? 1 : num[0]);
+        moveCursorRight(numCount == 0 ? 1 : num[0]);
         break;
     case 'D':
-        cursor.movePosition(QTextCursor::Left, QTextCursor::MoveAnchor, numCount == 0 ? 1 : num[0]);
+        moveCursorLeft(numCount == 0 ? 1 : num[0]);
         break;
     case 'm':
         if (numCount != 1) {
@@ -158,25 +174,24 @@ bool ConsoleWidget::processEscapeSequence(const QByteArray &seq)
 
         switch (num[0]) {
         case 0:
-            ansiBg_ = 0;
-            ansiFg_ = 7;
-            inverse_ = false;
+            currentColor_ = 0x07;
+            currentInverse_ = false;
             break;
         case 1:
-            if (ansiFg_ < 8)
-                ansiFg_ += 8;
+            if ((currentColor_ & 0x0f) < 8)
+                currentColor_ += 8;
             break;
         case 2:
         case 22:
-            if (ansiFg_ >= 8)
-                ansiFg_ -= 8;
+            if ((currentColor_ & 0x0f) >= 8)
+                currentColor_ -= 8;
             break;
         case 7:
-            inverse_ = true;
+            currentInverse_ = true;
             break;
 
         case 27:
-            inverse_ = false;
+            currentInverse_ = false;
             break;
 
         case 30:
@@ -187,7 +202,7 @@ bool ConsoleWidget::processEscapeSequence(const QByteArray &seq)
         case 35:
         case 36:
         case 37:
-            ansiFg_ = num[0] - 30 + (ansiFg_ < 8 ?  0 : 8);
+            currentColor_ = (currentColor_ & ~0x07) | (num[0] - 30);
             break;
 
         case 40:
@@ -198,7 +213,7 @@ bool ConsoleWidget::processEscapeSequence(const QByteArray &seq)
         case 45:
         case 46:
         case 47:
-            ansiBg_ = num[0] - 30 + (ansiBg_ < 8 ?  0 : 8);
+            currentColor_ = (currentColor_ & ~0x70) | ((num[0] - 30) << 4);
             break;
 
         default:
@@ -212,31 +227,7 @@ bool ConsoleWidget::processEscapeSequence(const QByteArray &seq)
         break;
     }
 
-    setTextCursor(cursor);
     return true;
-}
-
-QColor ConsoleWidget::ansiToColor(int code)
-{
-    switch (code) {
-    case 0:  return QColor(0x00, 0x00, 0x00);
-    case 1:  return QColor(0xaa, 0x00, 0x00);
-    case 2:  return QColor(0x00, 0xaa, 0x00);
-    case 3:  return QColor(0xaa, 0x55, 0x00);
-    case 4:  return QColor(0x00, 0x00, 0xaa);
-    case 5:  return QColor(0xaa, 0x00, 0xaa);
-    case 6:  return QColor(0x00, 0xaa, 0xaa);
-    case 7:  return QColor(0xaa, 0xaa, 0xaa);
-    case 8:  return QColor(0x55, 0x55, 0x55);
-    case 9:  return QColor(0xff, 0x55, 0x55);
-    case 10: return QColor(0x55, 0xff, 0x55);
-    case 11: return QColor(0xff, 0xff, 0x55);
-    case 12: return QColor(0x55, 0x55, 0xff);
-    case 13: return QColor(0xff, 0x55, 0xff);
-    case 14: return QColor(0x55, 0xff, 0xff);
-    default:
-    case 15: return QColor(0xff, 0xff, 0xff);
-    }
 }
 
 void ConsoleWidget::keyPressEvent(QKeyEvent *e)
@@ -286,11 +277,11 @@ void ConsoleWidget::keyPressEvent(QKeyEvent *e)
         break;
 
     case Qt::Key_PageUp:
-        verticalScrollBar()->setValue(verticalScrollBar()->value() - verticalScrollBar()->pageStep());
+        //verticalScrollBar()->setValue(verticalScrollBar()->value() - verticalScrollBar()->pageStep());
         break;
 
     case Qt::Key_PageDown:
-        verticalScrollBar()->setValue(verticalScrollBar()->value() + verticalScrollBar()->pageStep());
+        //verticalScrollBar()->setValue(verticalScrollBar()->value() + verticalScrollBar()->pageStep());
         break;
 
     default:
@@ -323,3 +314,166 @@ void ConsoleWidget::mouseDoubleClickEvent(QMouseEvent *e)
     e->accept();
 }
 
+void ConsoleWidget::setFontSize(int pointSize)
+{
+    font_ = QFont("DejaVu Sans Mono", pointSize);
+    QFontMetrics metrics(font_);
+    cellSize_.setHeight(metrics.height());
+    cellSize_.setWidth(metrics.averageCharWidth());
+    baseline_ = metrics.ascent();
+}
+
+int ConsoleWidget::fontSize() const
+{
+    return font_.pointSize();
+}
+
+void ConsoleWidget::clear()
+{
+    quint8 color = getCurrentColor();
+    for (int i = 0; i < consoleHeight_ * consoleWidth_; i++) {
+        cells_[i].c = QLatin1Char(' ');
+        cells_[i].color = color;
+    }
+}
+
+void ConsoleWidget::setColor(quint8 color)
+{
+    currentColor_ = color;
+}
+
+void ConsoleWidget::moveCursorUp(int count)
+{
+    cursorY_ = qMax(0, cursorY_ - count);
+}
+
+void ConsoleWidget::moveCursorDown(int count)
+{
+    while (count) {
+        if (cursorY_ < consoleHeight_ - 1) {
+            cursorY_++;
+        } else {
+            scrollUp();
+        }
+        count--;
+    }
+}
+
+void ConsoleWidget::moveCursorLeft(int count)
+{
+    while (count) {
+        if (cursorX_ > 0) {
+            cursorX_--;
+        } else {
+            moveCursorUp(1);
+            cursorX_ = consoleWidth_ - 1;
+        }
+        count--;
+    }
+}
+
+void ConsoleWidget::moveCursorRight(int count)
+{
+    while (count) {
+        if (cursorX_ < consoleWidth_ - 1) {
+            cursorX_++;
+        } else {
+            moveCursorDown(1);
+            cursorX_ = 0;
+        }
+        count--;
+    }
+}
+
+void ConsoleWidget::moveCursorStartOfLine()
+{
+    cursorX_ = 0;
+}
+
+quint8 ConsoleWidget::getCurrentColor() const
+{
+    if (!currentInverse_)
+        return currentColor_;
+    else
+        return (currentColor_ >> 4) | (currentColor_ << 4);
+}
+
+void ConsoleWidget::scrollUp()
+{
+    int lastLineOffset = consoleWidth_ * (consoleHeight_ - 1);
+    memmove(cells_, &cells_[consoleWidth_], lastLineOffset * sizeof(Cell));
+    quint8 color = getCurrentColor();
+    for (int i = 0; i < consoleWidth_; i++) {
+        cells_[lastLineOffset + i].c = QLatin1Char(' ');
+        cells_[lastLineOffset + i].color = color;
+    }
+    update();
+}
+
+void ConsoleWidget::print(const QString &text)
+{
+    for (int i = 0; i < text.length(); i++)
+        putchar(text.at(i));
+}
+
+void ConsoleWidget::putchar(QChar c)
+{
+    int index = cursorY_ * consoleWidth_ + cursorX_;
+    cells_[index].c = c;
+    cells_[index].color = getCurrentColor();
+    moveCursorRight(1);
+    update();
+}
+
+void ConsoleWidget::zoomIn()
+{
+    int newPointSize = fontSize() + 2;
+    if (newPointSize < 64)
+        setFontSize(newPointSize);
+}
+
+void ConsoleWidget::zoomOut()
+{
+    int newPointSize = fontSize() - 2;
+    if (newPointSize > 6)
+        setFontSize(newPointSize);
+}
+
+void ConsoleWidget::paintEvent(QPaintEvent *)
+{
+    QPainter p(this);
+
+    p.setFont(font_);
+    int index = 0;
+    for (int i = 0; i < 24; i++) {
+        for (int j = 0; j < 80; j++) {
+            QRect r(j * cellSize_.width(),
+                    i * cellSize_.height(),
+                    cellSize_.width(),
+                    cellSize_.height());
+            p.fillRect(r, colors_[cells_[index].color >> 4]);
+            QChar c = cells_[index].c;
+            if (c != QLatin1Char(' ')) {
+                p.setPen(colors_[cells_[index].color & 0x0f]);
+                p.drawText(r.x(),
+                           r.y() + baseline_,
+                           QString(c));
+            }
+            index++;
+        }
+    }
+
+    if (blink_) {
+        QRect r(cursorX_ * cellSize_.width(),
+                cursorY_ * cellSize_.height() + baseline_,
+                cellSize_.width(),
+                cellSize_.height() - baseline_);
+        p.fillRect(r, QColor(Qt::white));
+    }
+}
+
+void ConsoleWidget::timerEvent(QTimerEvent *)
+{
+    blink_ = !blink_;
+    update();
+}

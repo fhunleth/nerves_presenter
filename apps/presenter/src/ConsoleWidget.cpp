@@ -474,8 +474,11 @@ void ConsoleWidget::zoomOut()
         setFontSize(newPointSize);
 }
 
+#include <QElapsedTimer>
 void ConsoleWidget::paintEvent(QPaintEvent *)
 {
+    QElapsedTimer timer;
+    timer.start();
     QPainter p(this);
 
     p.setFont(font_);
@@ -519,6 +522,9 @@ void ConsoleWidget::paintEvent(QPaintEvent *)
                 cellSize_.height() - baseline_);
         p.fillRect(r, foregroundColors_[cursorColor /*7*/]);
     }
+
+    p.setPen(foregroundColors_[7]);
+    p.drawText(100, baseline_, QString("Elapsed millis: %1").arg(timer.elapsed()));
 }
 
 void ConsoleWidget::timerEvent(QTimerEvent *)

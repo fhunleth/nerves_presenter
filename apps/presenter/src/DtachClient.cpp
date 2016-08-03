@@ -49,7 +49,7 @@ void DtachClient::attach(const QString &filename)
         socket_->close();
     socket_ = new QLocalSocket(this);
     connect(socket_, SIGNAL(error(QLocalSocket::LocalSocketError)), SIGNAL(error()));
-    connect(socket_, SIGNAL(disconnected()), SIGNAL(error()));
+    connect(socket_, SIGNAL(disconnected()), SLOT(disconnected()));
     connect(socket_, SIGNAL(connected()), SLOT(connected()));
     connect(socket_, SIGNAL(readyRead()), SLOT(readyRead()));
 
@@ -66,13 +66,13 @@ void DtachClient::setWindowSize(int col, int row, int xpixel, int ypixel)
     pkt.u.ws.ws_xpixel = cachedXPixel_ = xpixel;
     pkt.u.ws.ws_ypixel = cachedYPixel_ = ypixel;
 
-    if (socket_)
+    if (socket_ && socket_->state() == QLocalSocket::ConnectedState)
         socket_->write((const char *) &pkt, sizeof(pkt));
 }
 
 void DtachClient::sendData(const QByteArray &data)
 {
-    if (!socket_)
+    if (!socket_ || socket_->state() != QLocalSocket::ConnectedState)
         return;
 
     int index = 0;
@@ -101,6 +101,12 @@ void DtachClient::connected()
     pkt.type = MSG_REDRAW;
     pkt.len = REDRAW_CTRL_L;
     socket_->write((const char *) &pkt, sizeof(pkt));
+}
+
+void DtachClient::disconnected()
+{
+    delete socket_;
+    socket_ = 0;
 }
 
 void DtachClient::readyRead()

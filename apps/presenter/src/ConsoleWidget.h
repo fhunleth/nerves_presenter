@@ -57,6 +57,8 @@ private:
     quint8 getCurrentColor() const;
     void flushBuffer();
     bool processEscapeSequence(const QByteArray &seq);
+    void moveVisibleToIncludeCursor();
+    void handleTerminalResize();
 
 private:
     DtachClient *client_;
@@ -72,16 +74,16 @@ private:
         QChar c;
         quint8 color;
     };
+    Cell *cells_;
 
-    int consoleWidth_;
-    int consoleHeight_;
-    int cursorX_;
-    int cursorY_;
+    // The following are in units of characters (not pixels)
+    const QRect bufferRegion_;
+    QRect visibleRegion_;
+    QPoint cursorLocation_;
+
     quint8 currentColor_;
     bool currentInverse_;
     bool blink_;
-
-    Cell *cells_;
 
     QByteArray escapeSequence_;
     QByteArray buffer_;

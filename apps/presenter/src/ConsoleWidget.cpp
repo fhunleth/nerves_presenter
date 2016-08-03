@@ -15,13 +15,11 @@
 
 ConsoleWidget::ConsoleWidget(QWidget *parent) :
     QWidget(parent),
-    consoleWidth_(80),
-    consoleHeight_(24),
+    bufferRegion_(0, 0, 200, 100), // max possible on screen at a time
+    visibleRegion_(0, 0, 80, 24), // what's currently visible
+    cursorLocation_(0, 0),
     blink_(false)
-
 {
-    setFontSize(12);
-
     // ANSI colors
     foregroundColors_[0] =  QColor(0x00, 0x00, 0x00);
     foregroundColors_[1] =  QColor(0xaa, 0x00, 0x00);
@@ -45,21 +43,20 @@ ConsoleWidget::ConsoleWidget(QWidget *parent) :
         backgroundColors_[i].setAlpha(192);
     }
 
-    cells_ = new Cell[consoleHeight_ * consoleWidth_];
-    cursorX_ = 0;
-    cursorY_ = 0;
+    cells_ = new Cell[bufferRegion_.height() * bufferRegion_.width()];
     currentColor_ = 0x07; // white on black background
     currentInverse_ = false;
-
-    clear();
-
-    startTimer(500);
 
     client_ = new DtachClient(this);
     connect(client_, SIGNAL(dataReceived(QByteArray)), SLOT(dataReceived(QByteArray)));
     connect(client_, SIGNAL(error()), SLOT(error()));
 
     client_->attach(DTACH_PIPE);
+
+    setFontSize(12);
+    clear();
+
+    startTimer(500);
 }
 
 ConsoleWidget::~ConsoleWidget()
@@ -291,11 +288,13 @@ void ConsoleWidget::keyPressEvent(QKeyEvent *e)
         break;
 
     case Qt::Key_PageUp:
-        //verticalScrollBar()->setValue(verticalScrollBar()->value() - verticalScrollBar()->pageStep());
+        visibleRegion_.moveTop(qMax(0, visibleRegion_.top() - visibleRegion_.height() - 1));
+        update();
         break;
 
     case Qt::Key_PageDown:
-        //verticalScrollBar()->setValue(verticalScrollBar()->value() + verticalScrollBar()->pageStep());
+        visibleRegion_.moveBottom(qMin(bufferRegion_.bottom(), visibleRegion_.bottom() + visibleRegion_.height() - 1));
+        update();
         break;
 
     default:
@@ -332,7 +331,7 @@ void ConsoleWidget::setFontSize(int pointSize)
     cellSize_.setHeight(metrics.height());
     cellSize_.setWidth(metrics.averageCharWidth());
     baseline_ = metrics.ascent();
-    update();
+    handleTerminalResize();
 }
 
 int ConsoleWidget::fontSize() const
@@ -343,12 +342,13 @@ int ConsoleWidget::fontSize() const
 void ConsoleWidget::clear()
 {
     quint8 color = getCurrentColor();
-    for (int i = 0; i < consoleHeight_ * consoleWidth_; i++) {
+    for (int i = 0; i < bufferRegion_.height() * bufferRegion_.width(); i++) {
         cells_[i].c = QLatin1Char(' ');
         cells_[i].color = color;
     }
-    cursorX_ = 0;
-    cursorY_ = 0;
+    cursorLocation_.setX(0);
+    cursorLocation_.setY(0);
+    visibleRegion_.moveTopLeft(cursorLocation_);
 }
 
 void ConsoleWidget::setColor(quint8 color)
@@ -356,56 +356,61 @@ void ConsoleWidget::setColor(quint8 color)
     currentColor_ = color;
 }
 
+void ConsoleWidget::moveVisibleToIncludeCursor()
+{
+    if (visibleRegion_.contains(cursorLocation_))
+        return;
+
+    if (cursorLocation_.y() < visibleRegion_.top())
+        visibleRegion_.moveTop(cursorLocation_.y());
+    else if (cursorLocation_.y() > visibleRegion_.bottom())
+        visibleRegion_.moveBottom(cursorLocation_.y());
+
+    if (cursorLocation_.x() < visibleRegion_.left())
+        visibleRegion_.moveLeft(cursorLocation_.x());
+    else if (cursorLocation_.x() > visibleRegion_.right())
+        visibleRegion_.moveRight(cursorLocation_.x());
+}
+
 void ConsoleWidget::moveCursorUp(int count)
 {
-    cursorY_ = qMax(0, cursorY_ - count);
+    cursorLocation_.setY(qMax(0, cursorLocation_.y() - count));
+    moveVisibleToIncludeCursor();
     blink_ = false;
 }
 
 void ConsoleWidget::moveCursorDown(int count)
 {
     while (count) {
-        if (cursorY_ < consoleHeight_ - 1) {
-            cursorY_++;
+        if (cursorLocation_.y() < bufferRegion_.height() - 1) {
+            cursorLocation_.setY(cursorLocation_.y() + 1);
         } else {
             scrollUp();
         }
         count--;
     }
+    moveVisibleToIncludeCursor();
     blink_ = false;
 }
 
 void ConsoleWidget::moveCursorLeft(int count)
 {
-    while (count) {
-        if (cursorX_ > 0) {
-            cursorX_--;
-        } else {
-            moveCursorUp(1);
-            cursorX_ = consoleWidth_ - 1;
-        }
-        count--;
-    }
+    cursorLocation_.setX(qMax(0, cursorLocation_.x() - count));
+    moveVisibleToIncludeCursor();
     blink_ = false;
 }
 
 void ConsoleWidget::moveCursorRight(int count)
 {
-    while (count) {
-        if (cursorX_ < consoleWidth_ - 1) {
-            cursorX_++;
-        } else {
-            moveCursorDown(1);
-            cursorX_ = 0;
-        }
-        count--;
-    }
+    cursorLocation_.setX(qMin(cursorLocation_.x() + count, bufferRegion_.width()));
+    moveVisibleToIncludeCursor();
     blink_ = false;
 }
 
 void ConsoleWidget::moveCursorStartOfLine()
 {
-    cursorX_ = 0;
+    cursorLocation_.setX(0);
+    moveVisibleToIncludeCursor();
 }
 
 quint8 ConsoleWidget::getCurrentColor() const
@@ -418,10 +423,10 @@ quint8 ConsoleWidget::getCurrentColor() const
 
 void ConsoleWidget::scrollUp()
 {
-    int lastLineOffset = consoleWidth_ * (consoleHeight_ - 1);
-    memmove(cells_, &cells_[consoleWidth_], lastLineOffset * sizeof(Cell));
+    int lastLineOffset = bufferRegion_.width() * (bufferRegion_.height() - 1);
+    memmove(cells_, &cells_[bufferRegion_.width()], lastLineOffset * sizeof(Cell));
     quint8 color = getCurrentColor();
-    for (int i = 0; i < consoleWidth_; i++) {
+    for (int i = 0; i < bufferRegion_.width(); i++) {
         cells_[lastLineOffset + i].c = QLatin1Char(' ');
         cells_[lastLineOffset + i].color = color;
     }
@@ -436,10 +441,15 @@ void ConsoleWidget::print(const QString &text)
 
 void ConsoleWidget::putchar(QChar c)
 {
-    int index = cursorY_ * consoleWidth_ + cursorX_;
+    int index = cursorLocation_.y() * bufferRegion_.width() + cursorLocation_.x();
     cells_[index].c = c;
     cells_[index].color = getCurrentColor();
-    moveCursorRight(1);
+    if (cursorLocation_.x() >= visibleRegion_.right()) {
+        cursorLocation_.setX(0);
+        moveCursorDown(1);
+    } else {
+        moveCursorRight(1);
+    }
     update();
 }
 
@@ -462,12 +472,12 @@ void ConsoleWidget::paintEvent(QPaintEvent *)
     QPainter p(this);
 
     p.setFont(font_);
-    int index = 0;
+    int index = visibleRegion_.y() * bufferRegion_.width() + visibleRegion_.x();
     int y = 0;
     int x = 0;
-    for (int i = 0; i < consoleHeight_; i++) {
+    for (int i = 0; i < visibleRegion_.height(); i++) {
         x = 0;
-        for (int j = 0; j < consoleWidth_; j++) {
+        for (int j = 0; j < visibleRegion_.width(); j++) {
             p.fillRect(x, y, cellSize_.width(), cellSize_.height(), backgroundColors_[cells_[index].color >> 4]);
             QChar c = cells_[index].c;
             if (c != QLatin1Char(' ')) {
@@ -479,6 +489,7 @@ void ConsoleWidget::paintEvent(QPaintEvent *)
             index++;
             x += cellSize_.width();
         }
+        index += bufferRegion_.width() - visibleRegion_.width();
         y += cellSize_.height();
     }
 
@@ -492,9 +503,11 @@ void ConsoleWidget::paintEvent(QPaintEvent *)
     p.fillRect(0, consoleHeightPixels, consoleWidthPixels, height() - consoleHeightPixels, backgroundColor);
 
     // Draw the cursor
-    if (!blink_) {
-        QRect r(cursorX_ * cellSize_.width(),
-                cursorY_ * cellSize_.height() + baseline_,
+    if (!blink_ && visibleRegion_.contains(cursorLocation_)) {
+        int cursorX = cursorLocation_.x() - visibleRegion_.x();
+        int cursorY = cursorLocation_.y() - visibleRegion_.y();
+        QRect r(cursorX * cellSize_.width(),
+                cursorY * cellSize_.height() + baseline_,
                 cellSize_.width(),
                 cellSize_.height() - baseline_);
         p.fillRect(r, foregroundColors_[7]);
@@ -507,12 +520,33 @@ void ConsoleWidget::timerEvent(QTimerEvent *)
     update();
 }
 
-void ConsoleWidget::resizeEvent(QResizeEvent *e)
+void ConsoleWidget::handleTerminalResize()
 {
-    int xpixel = e->size().width();
-    int ypixel = e->size().height();
-    int col = e->size().width() / cellSize_.width();
-    int row = e->size().height() / cellSize_.height();
+    // Notify the dtach program of our new size
+    int xpixel = size().width();
+    int ypixel = size().height();
+    int col = qMin(xpixel / cellSize_.width(), bufferRegion_.width());
+    int row = qMin(ypixel / cellSize_.height(), bufferRegion_.height());
 
     client_->setWindowSize(col, row, xpixel, ypixel);
+
+    // Grow/shrink the visible region
+    visibleRegion_.setWidth(col);
+    visibleRegion_.setHeight(row);
+
+    // In case it shrank, move it to include the cursor
+    moveVisibleToIncludeCursor();
+
+    // In case the visible region moved out of the buffered area, move it back.
+    if (visibleRegion_.bottom() > bufferRegion_.bottom())
+        visibleRegion_.moveBottom(bufferRegion_.bottom());
+    if (visibleRegion_.right() > bufferRegion_.right())
+        visibleRegion_.moveRight(bufferRegion_.right());
+
+    update();
+}
+
+void ConsoleWidget::resizeEvent(QResizeEvent *)
+{
+    handleTerminalResize();
 }

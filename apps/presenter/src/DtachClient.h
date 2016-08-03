@@ -12,6 +12,7 @@ public:
     explicit DtachClient(QObject *parent = 0);
 
     void attach(const QString &filename);
+    void setWindowSize(int col, int row, int xpixel, int ypixel);
 
 signals:
     void error();
@@ -26,6 +27,11 @@ private slots:
 
 private:
     QLocalSocket *socket_;
+
+    int cachedCol_;
+    int cachedRow_;
+    int cachedXPixel_;
+    int cachedYPixel_;
 };
 
 #endif // DTACHCLIENT_H

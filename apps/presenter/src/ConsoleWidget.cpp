@@ -92,7 +92,11 @@ void ConsoleWidget::dataReceived(const QByteArray &data)
 
 void ConsoleWidget::error()
 {
-    print("Error from dtach. Check " DTACH_PIPE "!");
+    moveCursorStartOfLine();
+    moveCursorDown(2);
+    print("Error from dtach. Check '" DTACH_PIPE "'!");
+    moveCursorDown(1);
+    moveCursorStartOfLine();
 }
 
 void ConsoleWidget::flushBuffer()
@@ -295,12 +299,9 @@ void ConsoleWidget::keyPressEvent(QKeyEvent *e)
         break;
 
     default:
-        if (e->modifiers() == Qt::ControlModifier &&
-                e->key() >= Qt::Key_A &&
-                e->key() <= Qt::Key_Z) {
-            char code = (char) (e->key() - Qt::Key_A + 1);
-            ansi.append(code);
-        } else
+        // Pass the key on unless it is the detach key "CTRL-\"
+        if (!(e->modifiers() == Qt::ControlModifier &&
+              e->key() == Qt::Key_Backslash))
             ansi = e->text().toUtf8();
         break;
     }
@@ -331,6 +332,7 @@ void ConsoleWidget::setFontSize(int pointSize)
     cellSize_.setHeight(metrics.height());
     cellSize_.setWidth(metrics.averageCharWidth());
     baseline_ = metrics.ascent();
+    update();
 }
 
 int ConsoleWidget::fontSize() const
@@ -505,7 +507,12 @@ void ConsoleWidget::timerEvent(QTimerEvent *)
     update();
 }
 
-void ConsoleWidget::resizeEvent(QResizeEvent *)
+void ConsoleWidget::resizeEvent(QResizeEvent *e)
 {
+    int xpixel = e->size().width();
+    int ypixel = e->size().height();
+    int col = e->size().width() / cellSize_.width();
+    int row = e->size().height() / cellSize_.height();
 
+    client_->setWindowSize(col, row, xpixel, ypixel);
 }

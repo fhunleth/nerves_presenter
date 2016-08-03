@@ -35,7 +35,11 @@ struct packet
 
 DtachClient::DtachClient(QObject *parent) :
     QObject(parent),
-    socket_(0)
+    socket_(0),
+    cachedCol_(80),
+    cachedRow_(24),
+    cachedXPixel_(0),
+    cachedYPixel_(0)
 {
 }
 
@@ -50,6 +54,20 @@ void DtachClient::attach(const QString &filename)
     connect(socket_, SIGNAL(readyRead()), SLOT(readyRead()));
 
     socket_->connectToServer(filename);
+}
+
+void DtachClient::setWindowSize(int col, int row, int xpixel, int ypixel)
+{
+    packet pkt;
+    pkt.type = MSG_REDRAW;
+    pkt.len = REDRAW_WINCH;
+    pkt.u.ws.ws_col = cachedCol_ = col;
+    pkt.u.ws.ws_row = cachedRow_ = row;
+    pkt.u.ws.ws_xpixel = cachedXPixel_ = xpixel;
+    pkt.u.ws.ws_ypixel = cachedYPixel_ = ypixel;
+
+    if (socket_)
+        socket_->write((const char *) &pkt, sizeof(pkt));
 }
 
 void DtachClient::sendData(const QByteArray &data)
@@ -71,12 +89,15 @@ void DtachClient::sendData(const QByteArray &data)
 
 void DtachClient::connected()
 {
-    /* Tell the master that we want to attach. */
+    // Tell the master that we want to attach.
     packet pkt;
     pkt.type = MSG_ATTACH;
     socket_->write((const char *) &pkt, sizeof(pkt));
 
-    /* We would like a redraw, too. */
+    // Set the window width and height
+    setWindowSize(cachedCol_, cachedRow_, cachedXPixel_, cachedYPixel_);
+
+    // We would like a redraw, too.
     pkt.type = MSG_REDRAW;
     pkt.len = REDRAW_CTRL_L;
     socket_->write((const char *) &pkt, sizeof(pkt));

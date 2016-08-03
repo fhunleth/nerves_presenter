@@ -118,6 +118,7 @@ void PresentationWidget::paintEvent(QPaintEvent *)
 
     p.fillRect(rect(), Qt::black);
 
+#if 0
     QImage img;
     switch (state_) {
     case Slide:
@@ -133,6 +134,7 @@ void PresentationWidget::paintEvent(QPaintEvent *)
         break;
     }
     scaleImage(&p, img);
+#endif
 }
 
 void PresentationWidget::mouseMoveEvent(QMouseEvent *)

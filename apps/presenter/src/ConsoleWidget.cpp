@@ -241,10 +241,17 @@ bool ConsoleWidget::processEscapeSequence(const QByteArray &seq)
     return true;
 }
 
+static int cursorColor = 7;
+
 void ConsoleWidget::keyPressEvent(QKeyEvent *e)
 {
     QByteArray ansi;
     e->accept();
+
+    cursorColor++;
+    if (cursorColor > 15)
+        cursorColor = 1;
+    update();
 
     switch (e->key()) {
     case Qt::Key_F2:
@@ -503,14 +510,14 @@ void ConsoleWidget::paintEvent(QPaintEvent *)
     p.fillRect(0, consoleHeightPixels, consoleWidthPixels, height() - consoleHeightPixels, backgroundColor);
 
     // Draw the cursor
-    if (!blink_ && visibleRegion_.contains(cursorLocation_)) {
+    if (/*!blink_ && */ visibleRegion_.contains(cursorLocation_)) {
         int cursorX = cursorLocation_.x() - visibleRegion_.x();
         int cursorY = cursorLocation_.y() - visibleRegion_.y();
         QRect r(cursorX * cellSize_.width(),
                 cursorY * cellSize_.height() + baseline_,
                 cellSize_.width(),
                 cellSize_.height() - baseline_);
-        p.fillRect(r, foregroundColors_[7]);
+        p.fillRect(r, foregroundColors_[cursorColor /*7*/]);
     }
 }
 

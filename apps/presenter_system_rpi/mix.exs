@@ -21,8 +21,8 @@ defmodule PresenterSystemRpi.Mixfile do
 
   defp deps do
     [{:nerves_system, github: "nerves-project/nerves_system", branch: "master"},
-     {:nerves_system_br, github: "nerves-project/nerves_system_br", ref: "edc6a51c4254b26161e1d3b40765739a61e1980d"},
-     #{:nerves_system_br, "~> 0.6.0"},
+     #{:nerves_system_br, github: "nerves-project/nerves_system_br", ref: "edc6a51c4254b26161e1d3b40765739a61e1980d"},
+     {:nerves_system_br, "~> 0.6.1"},
      {:nerves_toolchain_armv6_rpi_linux_gnueabi, "~> 0.6.1"}]
   end
 

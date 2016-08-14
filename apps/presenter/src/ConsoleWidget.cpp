@@ -471,14 +471,45 @@ void ConsoleWidget::paintEvent(QPaintEvent *)
 {
     QPainter p(this);
 
-    p.setFont(font_);
     int index = visibleRegion_.y() * bufferRegion_.width() + visibleRegion_.x();
     int y = 0;
     int x = 0;
     for (int i = 0; i < visibleRegion_.height(); i++) {
         x = 0;
+        int bx = 0;
+        quint8 background = cells_[index].color >> 4;
         for (int j = 0; j < visibleRegion_.width(); j++) {
-            p.fillRect(x, y, cellSize_.width(), cellSize_.height(), backgroundColors_[cells_[index].color >> 4]);
+            quint8 newBackground = cells_[index].color >> 4;
+            if (background != newBackground) {
+                p.fillRect(bx, y, x - bx, cellSize_.height(), backgroundColors_[background]);
+                bx = x;
+                background = newBackground;
+            }
+            index++;
+            x += cellSize_.width();
+        }
+        p.fillRect(bx, y, x - bx, cellSize_.height(), backgroundColors_[background]);
+        index += bufferRegion_.width() - visibleRegion_.width();
+        y += cellSize_.height();
+    }
+
+    // Fill in the areas not covered by the console
+    quint8 background = getCurrentColor() >> 4;
+    QColor backgroundColor = backgroundColors_[background];
+    int consoleWidthPixels = x;
+    int consoleHeightPixels = y;
+
+    p.fillRect(consoleWidthPixels, 0, width() - consoleWidthPixels, height(), backgroundColor);
+    p.fillRect(0, consoleHeightPixels, consoleWidthPixels, height() - consoleHeightPixels, backgroundColor);
+
+    // Draw all of the letters.
+    p.setFont(font_);
+    index = visibleRegion_.y() * bufferRegion_.width() + visibleRegion_.x();
+    y = 0;
+    x = 0;
+    for (int i = 0; i < visibleRegion_.height(); i++) {
+        x = 0;
+        for (int j = 0; j < visibleRegion_.width(); j++) {
             QChar c = cells_[index].c;
             if (c != QLatin1Char(' ')) {
                 p.setPen(foregroundColors_[cells_[index].color & 0x0f]);
@@ -493,14 +524,6 @@ void ConsoleWidget::paintEvent(QPaintEvent *)
         y += cellSize_.height();
     }
 
-    // Fill in the areas not covered by the console
-    quint8 background = getCurrentColor() >> 4;
-    QColor backgroundColor = backgroundColors_[background];
-    int consoleWidthPixels = x;
-    int consoleHeightPixels = y;
-
-    p.fillRect(consoleWidthPixels, 0, width() - consoleWidthPixels, height(), backgroundColor);
-    p.fillRect(0, consoleHeightPixels, consoleWidthPixels, height() - consoleHeightPixels, backgroundColor);
 
     // Draw the cursor
     if (!blink_ && visibleRegion_.contains(cursorLocation_)) {
